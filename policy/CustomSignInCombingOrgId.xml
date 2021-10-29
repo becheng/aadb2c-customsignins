@@ -111,8 +111,8 @@
 
         <TechnicalProfile Id="login-NonInteractive">
           <Metadata>
-            <Item Key="client_id">78b5ef62-91dc-45f0-8b89-fc0e0e063ec1</Item>
-            <Item Key="IdTokenAudience">2470d8b2-4d33-4e4e-8376-80502b3993c0</Item>
+            <Item Key="client_id">[Your ProxyIdentityExperienceFrameworkAppId here]</Item>
+            <Item Key="IdTokenAudience">[Your IdentityExperienceFrameworkAppId]</Item>
           </Metadata>
 
           <!-- transform signInName to prefix the orgId to the signInName value before sign in-->
@@ -123,8 +123,8 @@
           </InputClaimsTransformations>
 
           <InputClaims>
-            <InputClaim ClaimTypeReferenceId="client_id" DefaultValue="78b5ef62-91dc-45f0-8b89-fc0e0e063ec1" />
-            <InputClaim ClaimTypeReferenceId="resource_id" PartnerClaimType="resource" DefaultValue="2470d8b2-4d33-4e4e-8376-80502b3993c0" />
+            <InputClaim ClaimTypeReferenceId="client_id" DefaultValue="[Your ProxyIdentityExperienceFrameworkAppId here]" />
+            <InputClaim ClaimTypeReferenceId="resource_id" PartnerClaimType="resource" DefaultValue="[Your IdentityExperienceFrameworkAppId]" />
           </InputClaims>
 
         </TechnicalProfile>
