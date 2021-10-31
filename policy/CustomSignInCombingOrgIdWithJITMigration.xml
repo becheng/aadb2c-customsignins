@@ -1,0 +1,296 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<TrustFrameworkPolicy 
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+  xmlns:xsd="http://www.w3.org/2001/XMLSchema" 
+  xmlns="http://schemas.microsoft.com/online/cpim/schemas/2013/06" 
+  PolicySchemaVersion="0.3.0.0" 
+  TenantId="yourtenant.onmicrosoft.com" 
+  PolicyId="CustomSignInCombiningOrgIdWithJITMigration" 
+  PublicPolicyUri="http://yourtenant.onmicrosoft.com/CustomSignInCombiningOrgIdWithJITMigration">
+  
+  <BasePolicy>
+    <TenantId>yourtenant.onmicrosoft.com</TenantId>
+    <PolicyId>B2C_1A_TrustFrameworkBase</PolicyId>
+  </BasePolicy>
+  <BuildingBlocks>
+    <ClaimsSchema>
+
+      <!-- 'Variable' claims !!! Cannot be used as outputClaims in a Self-asserted Tech profile (WILL BREAK THE POLICY) !!! --> 
+      <ClaimType Id="usernameContainer">
+        <DataType>stringCollection</DataType>
+      </ClaimType>
+
+      <ClaimType Id="useInputPassword">
+        <DisplayName>useInputPassword</DisplayName>
+        <DataType>boolean</DataType>
+      </ClaimType>
+
+      <ClaimType Id="needToMigrate">
+        <DisplayName>needToMigrate</DisplayName>
+        <DataType>string</DataType>
+      </ClaimType>
+
+      <!-- OutputClaims for self asserted technical profiles -->
+      <ClaimType Id="customUserName">
+        <DisplayName>Username or Email</DisplayName>
+        <DataType>string</DataType>
+        <UserHelpText>Enter username or email</UserHelpText>
+        <UserInputType>TextBox</UserInputType>     
+      </ClaimType>   
+
+      <ClaimType Id="orgIdInput">
+        <DisplayName>Organization Id</DisplayName>
+        <DataType>string</DataType>
+        <UserHelpText>Enter organization identitier</UserHelpText>
+        <UserInputType>TextBox</UserInputType>     
+      </ClaimType>   
+
+    </ClaimsSchema>
+
+    <ClaimsTransformations>
+    
+      <ClaimsTransformation Id="AddOrgIdToStrCol" TransformationMethod="AddItemToStringCollection">
+        <InputClaims>
+          <InputClaim ClaimTypeReferenceId="orgIdInput" TransformationClaimType="item" />
+          <InputClaim ClaimTypeReferenceId="usernameContainer" TransformationClaimType="collection" />
+        </InputClaims>
+        <OutputClaims>
+          <OutputClaim ClaimTypeReferenceId="usernameContainer" TransformationClaimType="collection" />
+        </OutputClaims>
+      </ClaimsTransformation>
+
+      <ClaimsTransformation Id="AddSignInNameToStrCol" TransformationMethod="AddItemToStringCollection">
+        <InputClaims>
+          <InputClaim ClaimTypeReferenceId="signInName" TransformationClaimType="item" />
+          <InputClaim ClaimTypeReferenceId="usernameContainer" TransformationClaimType="collection" />
+        </InputClaims>
+        <OutputClaims>
+          <OutputClaim ClaimTypeReferenceId="usernameContainer" TransformationClaimType="collection" />
+        </OutputClaims>
+      </ClaimsTransformation>
+
+      <ClaimsTransformation Id="PrefixUsernameWithOrgId" TransformationMethod="StringJoin">
+        <InputClaims>
+         <InputClaim ClaimTypeReferenceId="usernameContainer" TransformationClaimType="inputClaim" />
+        </InputClaims>
+        <InputParameters>
+          <InputParameter DataType="string" Id="delimiter" Value="-" />
+        </InputParameters>
+        <OutputClaims>
+          <OutputClaim ClaimTypeReferenceId="signInName" TransformationClaimType="outputClaim" />
+        </OutputClaims>
+      </ClaimsTransformation>      
+      
+    </ClaimsTransformations>
+
+  </BuildingBlocks>
+
+  <ClaimsProviders>
+		
+    <!-- Local account Sign-In claims provider -->
+    <ClaimsProvider>
+      <DisplayName>Local Account SignIn</DisplayName>
+      <TechnicalProfiles>
+
+        <TechnicalProfile Id="SignInWithOrgId">
+          <DisplayName>Sign in with Org Id</DisplayName>
+          <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.SelfAssertedAttributeProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null" />
+          <Metadata>
+            <Item Key="ContentDefinitionReferenceId">api.selfasserted</Item>
+            <Item Key="language.button_continue">Sign in</Item>
+            <Item Key="setting.showCancelButton">false</Item>
+            <Item Key="setting.operatingMode">Username</Item>
+          </Metadata>
+          <IncludeInSso>false</IncludeInSso>          
+          <InputClaims>
+            <InputClaim ClaimTypeReferenceId="signInName" />
+          </InputClaims>  
+          <OutputClaims>
+            <OutputClaim ClaimTypeReferenceId="signInName" Required="true"/> <!-- capture user inputted username -->
+            <OutputClaim ClaimTypeReferenceId="password" Required="true"/>      <!-- use the existing password claim -->
+            <OutputClaim ClaimTypeReferenceId="orgIdInput" Required="true"/>    <!-- capture user inputted orgId -->    
+            <OutputClaim ClaimTypeReferenceId="objectId" />
+            <OutputClaim ClaimTypeReferenceId="authenticationSource" DefaultValue="localAccountAuthentication"/>
+          </OutputClaims>
+          <ValidationTechnicalProfiles>
+            
+            <!-- 1. Call the migration api to determine if sign-in needs to migrated from the downstream app database -->
+            <ValidationTechnicalProfile ReferenceId="REST-UserMigration-LocalAccount-SignIn" ContinueOnError="false" />
+            
+            <!-- 2. If the 'needToMigrate' claim returned by the migration api indicates this user requires migration, skip local acct login -->
+            <ValidationTechnicalProfile ReferenceId="login-NonInteractive">
+              <Preconditions>
+                <Precondition Type="ClaimEquals" ExecuteActionsIf="true">
+                  <Value>needToMigrate</Value>
+                  <Value>true</Value>
+                  <Action>SkipThisValidationTechnicalProfile</Action>
+                </Precondition>
+              </Preconditions>          
+            </ValidationTechnicalProfile>
+
+            <!-- 3. Otherwise migrate teh user to b2c as a local account  -->
+            <ValidationTechnicalProfile ReferenceId="AAD-UserWriteUsingLogonName">
+              <Preconditions>
+                <Precondition Type="ClaimEquals" ExecuteActionsIf="false">
+                  <Value>needToMigrate</Value>
+                  <Value>true</Value>
+                  <Action>SkipThisValidationTechnicalProfile</Action>
+                </Precondition>
+              </Preconditions>          
+            </ValidationTechnicalProfile>
+
+          </ValidationTechnicalProfiles>
+          <UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD" />
+        </TechnicalProfile>
+
+        <TechnicalProfile Id="login-NonInteractive">
+          <Metadata>
+            <Item Key="client_id">[Your ProxyIdentityExperienceFrameworkAppId here]</Item>
+            <Item Key="IdTokenAudience">[Your IdentityExperienceFrameworkAppId]</Item>
+          </Metadata>
+
+          <!-- transform signInName to prefix the orgId to the signInName value before sign in-->
+          <InputClaimsTransformations>
+            <InputClaimsTransformation ReferenceId="AddOrgIdToStrCol" />         <!-- add the org Id to a string collection -->     
+            <InputClaimsTransformation ReferenceId="AddSignInNameToStrCol" />    <!-- add the userName to a string collection -->   
+            <InputClaimsTransformation ReferenceId="PrefixUsernameWithOrgId" />  <!-- concat the orgId + username, separated by a '-' -->   
+          </InputClaimsTransformations>
+
+          <InputClaims>
+            <InputClaim ClaimTypeReferenceId="client_id" DefaultValue="[Your ProxyIdentityExperienceFrameworkAppId here]" />
+            <InputClaim ClaimTypeReferenceId="resource_id" PartnerClaimType="resource" DefaultValue="[Your IdentityExperienceFrameworkAppId]" />
+          </InputClaims>
+
+        </TechnicalProfile>
+
+      </TechnicalProfiles>
+    </ClaimsProvider>
+
+    <ClaimsProvider>
+      <DisplayName>Azure Active Directory</DisplayName>
+      <TechnicalProfiles>
+				<TechnicalProfile Id="AAD-UserWriteUsingLogonName">
+					<Metadata>
+						<Item Key="Operation">Write</Item>
+						<Item Key="RaiseErrorIfClaimsPrincipalAlreadyExists">true</Item>
+					</Metadata>
+
+          <!-- transform signInName to prefix the orgId to the signInName value before sign in-->
+          <InputClaimsTransformations>
+            <InputClaimsTransformation ReferenceId="AddOrgIdToStrCol" />         <!-- add the org Id to a string collection -->     
+            <InputClaimsTransformation ReferenceId="AddSignInNameToStrCol" />    <!-- add the userName to a string collection -->   
+            <InputClaimsTransformation ReferenceId="PrefixUsernameWithOrgId" />  <!-- concat the orgId + username, separated by a '-' -->   
+          </InputClaimsTransformations>
+
+          <InputClaims>
+						<InputClaim ClaimTypeReferenceId="signInName" PartnerClaimType="signInNames.userName" Required="true" />
+					</InputClaims>
+					<PersistedClaims>
+						<PersistedClaim ClaimTypeReferenceId="signInName" PartnerClaimType="signInNames.userName" />
+						<PersistedClaim ClaimTypeReferenceId="newPassword" PartnerClaimType="password" />
+						<PersistedClaim ClaimTypeReferenceId="displayName" DefaultValue="unknown" />
+            <PersistedClaim ClaimTypeReferenceId="passwordPolicies" DefaultValue="DisablePasswordExpiration,DisableStrongPassword" AlwaysUseDefaultValue="true"/>
+						<!-- Optional claims. -->
+						<PersistedClaim ClaimTypeReferenceId="givenName" />
+						<PersistedClaim ClaimTypeReferenceId="surname" />
+					</PersistedClaims>
+					<OutputClaims>
+						<OutputClaim ClaimTypeReferenceId="objectId" />
+						<OutputClaim ClaimTypeReferenceId="newUser" PartnerClaimType="newClaimsPrincipalCreated" />
+						<OutputClaim ClaimTypeReferenceId="authenticationSource" DefaultValue="localAccountAuthentication" />
+						<OutputClaim ClaimTypeReferenceId="userPrincipalName" />
+					</OutputClaims>
+					<IncludeTechnicalProfile ReferenceId="AAD-Common" />
+					<UseTechnicalProfileForSessionManagement ReferenceId="SM-AAD" />
+				</TechnicalProfile>        
+
+        <!-- override the AAD-UserReadUsingObjectId to include the userPrincipalName outputclaim-->
+        <TechnicalProfile Id="AAD-UserReadUsingObjectId">
+          <OutputClaims>
+            <OutputClaim ClaimTypeReferenceId="userPrincipalName"/>
+          </OutputClaims>    
+        </TechnicalProfile>
+
+      </TechnicalProfiles>
+    </ClaimsProvider>
+
+  	<ClaimsProvider>
+	    <DisplayName>Migration APIs</DisplayName>
+	    <TechnicalProfiles>
+        <!--Api that checks if user exists in the migration table. If yes, validate the credentials and migrate the account --> 
+        <TechnicalProfile Id="REST-UserMigration-LocalAccount-SignIn">
+            <DisplayName>Migrate user sign-in flow</DisplayName>
+            <Protocol Name="Proprietary" Handler="Web.TPEngine.Providers.RestfulProvider, Web.TPEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null" />
+            <Metadata>
+              <Item Key="ServiceUrl">http://yourAppServiceOrFunctionApp/api/migrateUserAcct</Item>
+              <Item Key="AuthenticationType">None</Item><!-- in prod, set this to 'Bearer'-->
+              <Item Key="SendClaimsIn">Body</Item>
+              <Item Key="AllowInsecureAuthInProduction">True</Item> <!-- in prod, set this to 'False'-->
+            </Metadata>
+            <InputClaims>
+              <InputClaim ClaimTypeReferenceId="signInName" />
+              <InputClaim ClaimTypeReferenceId="orgIdInput"/>    
+              <InputClaim ClaimTypeReferenceId="password" />
+              <InputClaim ClaimTypeReferenceId="useInputPassword" DefaultValue="false" />
+              </InputClaims>
+            <OutputClaims>
+              <OutputClaim ClaimTypeReferenceId="needToMigrate" />
+              <!-- <OutputClaim ClaimTypeReferenceId="email" /> -->
+              <OutputClaim ClaimTypeReferenceId="newPassword" />
+              <OutputClaim ClaimTypeReferenceId="displayName" />
+            </OutputClaims>          
+            <UseTechnicalProfileForSessionManagement ReferenceId="SM-Noop" />
+        </TechnicalProfile>
+      </TechnicalProfiles>
+    </ClaimsProvider>
+
+  </ClaimsProviders>
+
+  <UserJourneys>
+
+    <UserJourney Id="SignIn">
+      <OrchestrationSteps>
+   
+        <OrchestrationStep Order="1" Type="ClaimsExchange">
+          <ClaimsExchanges>
+            <ClaimsExchange Id="CustomSigninPage" TechnicalProfileReferenceId="SignInWithOrgId" />
+          </ClaimsExchanges>
+        </OrchestrationStep>
+        
+        <OrchestrationStep Order="2" Type="ClaimsExchange">
+          <ClaimsExchanges>
+            <ClaimsExchange Id="AADUserReadWithObjectId" TechnicalProfileReferenceId="AAD-UserReadUsingObjectId" />
+          </ClaimsExchanges>
+        </OrchestrationStep>
+      
+        <OrchestrationStep Order="3" Type="SendClaims" CpimIssuerTechnicalProfileReferenceId="JwtIssuer" />
+    
+      </OrchestrationSteps>
+      <ClientDefinition ReferenceId="DefaultWeb" />
+    </UserJourney>
+
+  </UserJourneys>
+
+  <RelyingParty>
+
+    <DefaultUserJourney ReferenceId="SignIn" />
+    <TechnicalProfile Id="PolicyProfile">
+      <DisplayName>PolicyProfile</DisplayName>
+      <Protocol Name="OpenIdConnect" />
+      <InputClaims>
+        <InputClaim ClaimTypeReferenceId="passwordPolicies" DefaultValue="DisablePasswordExpiration, DisableStrongPassword"/>
+      </InputClaims>
+      <OutputClaims>
+        <OutputClaim ClaimTypeReferenceId="displayName" />
+        <OutputClaim ClaimTypeReferenceId="givenName" />
+        <OutputClaim ClaimTypeReferenceId="surname" />
+        <OutputClaim ClaimTypeReferenceId="objectId" PartnerClaimType="sub"/>
+        <OutputClaim ClaimTypeReferenceId="userPrincipalName"/>
+        <OutputClaim ClaimTypeReferenceId="authenticationSource"/>
+      </OutputClaims>
+      <SubjectNamingInfo ClaimType="sub" />
+    </TechnicalProfile>
+
+  </RelyingParty>
+
+</TrustFrameworkPolicy>

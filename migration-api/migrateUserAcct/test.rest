@@ -1,0 +1,57 @@
+### Requires "REST Client" VScode extension 
+
+POST http://localhost:7071/api/migrateUserAcct  HTTP/1.1
+Content-Type:  application/json 
+
+{
+    // negative test - expected result 'password incorrect msg'
+    "signInName": "userName10",
+    "orgIdInput": "org1",
+    "password": "Password123x",
+    "useInputPassword": false
+}
+
+###
+
+
+POST http://localhost:7071/api/migrateUserAcct  HTTP/1.1
+Content-Type:  application/json 
+
+{
+    // positve test - expected result = full response json returned 
+    // with needToMigrate = true
+    "signInName": "userName10",
+    "orgIdInput": "org1",
+    "password": "Password123",
+    "useInputPassword": false
+}
+
+###
+
+POST http://localhost:7071/api/migrateUserAcct  HTTP/1.1
+Content-Type:  application/json 
+
+{
+    // positve test - expected result = full response json returned 
+    // with needToMigrate = false
+    "signInName": "userName10xx",
+    "orgIdInput": "org1",
+    "password": "Password123",
+    "useInputPassword": false
+}
+
+###
+
+POST http://ad83-99-229-18-15.ngrok.io/api/migrateUserAcct  HTTP/1.1
+Content-Type:  application/json 
+
+{
+    "signInName": "user3",
+    "orgIdInput": "org1",
+    "password": "Engineno9",
+    "useInputPassword": false
+}
+
+###
+
+GET http://localhost:7071/api/createMigrationTable  HTTP/1.1
