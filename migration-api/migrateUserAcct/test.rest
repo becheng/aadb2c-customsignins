@@ -1,6 +1,6 @@
 ### Requires "REST Client" VScode extension 
 
-POST http://localhost:7071/api/migrateUserAcct  HTTP/1.1
+POST http://<ngrok-guid>.ngrok.io/api/migrateUserAcct  HTTP/1.1
 Content-Type:  application/json 
 
 {
@@ -42,7 +42,7 @@ Content-Type:  application/json
 
 ###
 
-POST http://ad83-99-229-18-15.ngrok.io/api/migrateUserAcct  HTTP/1.1
+POST http://<ngrok-guid>.ngrok.io/api/migrateUserAcct  HTTP/1.1
 Content-Type:  application/json 
 
 {
